@@ -1,0 +1,45 @@
+name: Windows RDP (Tailscale)
+
+on: [workflow_dispatch]
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    timeout-minutes: 9999
+
+    steps:
+    - name: Enable Remote Desktop
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    - name: Set RDP Password
+      run: |
+        $password = ConvertTo-SecureString "@cyb3rking" -AsPlainText -Force
+        Set-LocalUser -Name "runneradmin" -Password $password
+
+    - name: Install Tailscale
+      run: |
+        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "ts.msi"
+        Start-Process msiexec.exe -ArgumentList "/i ts.msi /quiet /norestart" -Wait
+
+    - name: Start Tailscale
+      run: |
+        & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $env:TS_KEY --hostname=gh-runner-$env:GITHUB_RUN_ID
+      env:
+        TS_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+    - name: Show Tailscale IP
+      run: |
+        $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+        Write-Host "`n===== RDP DETAILS ====="
+        Write-Host "Tailscale IP: $ip"
+        Write-Host "User: runneradmin"
+        Write-Host "Pass: @cyb3rking"
+        Write-Host "========================`n"
+
+    - name: Keep Alive
+      run: |
+        while ($true) {
+          Start-Sleep 300
+        }
